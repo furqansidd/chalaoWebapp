@@ -13,4 +13,4 @@
 | phase3-task4 | Payment and Deposit Upload API Endpoint | x | |
 | phase4-task1 | Check-in Upload API Endpoint | x | |
 | phase4-task2 | Check-out Upload API Endpoint | x | |
-| phase4-task3 | Background Worker and FastAPI CV Pipeline | pending | |
+| phase4-task3 | Background Worker and FastAPI CV Pipeline | x | |
