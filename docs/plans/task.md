@@ -6,4 +6,4 @@
 | phase1-task4 | User Registration Endpoint | x | |
 | phase1-task5 | User Login API Endpoint | x | |
 | phase2-task1 | Car Listing Creation API Endpoint | x | |
-| phase2-task2 | Car Listing Retrieval & Filter Search API Endpoint | pending | |
+| phase2-task2 | Car Listing Retrieval & Filter Search API Endpoint | x | |

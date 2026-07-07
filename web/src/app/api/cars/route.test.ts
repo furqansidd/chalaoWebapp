@@ -1,5 +1,5 @@
 import { expect, test, describe, vi, beforeEach } from "vitest";
-import { POST } from "./route";
+import { POST, GET } from "./route";
 import { prisma } from "../../../lib/prisma";
 
 vi.mock("../../../lib/prisma", () => {
@@ -8,6 +8,10 @@ vi.mock("../../../lib/prisma", () => {
       car: {
         findUnique: vi.fn(),
         create: vi.fn(),
+        findMany: vi.fn(),
+      },
+      booking: {
+        findMany: vi.fn(),
       },
     },
   };
@@ -146,6 +150,114 @@ describe("POST /api/cars", () => {
     });
 
     const response = await POST(req);
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("GET /api/cars", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("returns all cars when no filters are provided", async () => {
+    const mockCars = [
+      { id: "1", make: "Toyota", model: "Corolla", city: "KARACHI" },
+      { id: "2", make: "Honda", model: "Civic", city: "LAHORE" },
+    ];
+    vi.mocked(prisma.car.findMany).mockResolvedValue(mockCars as any);
+
+    const req = new Request("http://localhost/api/cars");
+    const response = await GET(req);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.cars).toHaveLength(2);
+    expect(prisma.car.findMany).toHaveBeenCalledWith({
+      where: {},
+    });
+  });
+
+  test("filters cars by city successfully", async () => {
+    const mockCars = [
+      { id: "2", make: "Honda", model: "Civic", city: "LAHORE" },
+    ];
+    vi.mocked(prisma.car.findMany).mockResolvedValue(mockCars as any);
+
+    const req = new Request("http://localhost/api/cars?city=LAHORE");
+    const response = await GET(req);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.cars).toHaveLength(1);
+    expect(prisma.car.findMany).toHaveBeenCalledWith({
+      where: {
+        city: "LAHORE",
+      },
+    });
+  });
+
+  test("returns 400 for invalid city query parameter", async () => {
+    const req = new Request("http://localhost/api/cars?city=INVALID_CITY");
+    const response = await GET(req);
+    expect(response.status).toBe(400);
+    expect(prisma.car.findMany).not.toHaveBeenCalled();
+  });
+
+  test("excludes cars with overlapping bookings", async () => {
+    // Mock 2 bookings overlapping for car ID "1"
+    vi.mocked(prisma.booking.findMany).mockResolvedValue([
+      { carId: "1" },
+    ] as any);
+
+    // Mock findMany to return only car ID "2" which has no overlapping booking
+    vi.mocked(prisma.car.findMany).mockResolvedValue([
+      { id: "2", make: "Honda", model: "Civic", city: "LAHORE" },
+    ] as any);
+
+    const req = new Request(
+      "http://localhost/api/cars?city=LAHORE&startDate=2026-07-10T12:00:00.000Z&endDate=2026-07-15T12:00:00.000Z"
+    );
+    const response = await GET(req);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.cars).toHaveLength(1);
+    expect(body.cars[0].id).toBe("2");
+
+    // Check that bookings were queried with correct overlap logic
+    expect(prisma.booking.findMany).toHaveBeenCalledWith({
+      where: {
+        status: { not: "CANCELLED" },
+        OR: [
+          {
+            startDate: { lte: new Date("2026-07-15T12:00:00.000Z") },
+            endDate: { gte: new Date("2026-07-10T12:00:00.000Z") },
+          },
+        ],
+      },
+      select: { carId: true },
+    });
+
+    // Check that cars findMany excluded carId "1"
+    expect(prisma.car.findMany).toHaveBeenCalledWith({
+      where: {
+        city: "LAHORE",
+        id: { notIn: ["1"] },
+      },
+    });
+  });
+
+  test("returns 400 if only one date parameter is provided", async () => {
+    const req = new Request("http://localhost/api/cars?startDate=2026-07-10T12:00:00.000Z");
+    const response = await GET(req);
+    expect(response.status).toBe(400);
+  });
+
+  test("returns 400 if startDate is after endDate", async () => {
+    const req = new Request(
+      "http://localhost/api/cars?startDate=2026-07-15T12:00:00.000Z&endDate=2026-07-10T12:00:00.000Z"
+    );
+    const response = await GET(req);
     expect(response.status).toBe(400);
   });
 });
