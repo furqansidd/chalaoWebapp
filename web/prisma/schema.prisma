@@ -1,0 +1,204 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum City {
+  KARACHI
+  LAHORE
+  ISLAMABAD
+}
+
+enum BookingStatus {
+  PENDING_APPROVAL
+  PENDING_PAYMENT
+  PAID
+  CHECKED_IN      // Before-trip photos uploaded
+  ACTIVE          // Rental ongoing
+  CHECKED_OUT     // After-trip photos uploaded
+  COMPLETED       // Deposit released / closed
+  CANCELLED
+}
+
+enum RiskTier {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RefundStatus {
+  NONE
+  PENDING
+  PARTIAL
+  FULL
+}
+
+enum PaymentMethod {
+  STRIPE
+  IBFT
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  passwordHash   String
+  name           String
+  role           Role      @default(USER)
+  isVerified     Boolean   @default(false)
+  
+  // Encrypted at rest at application-layer using AES-256-GCM
+  cnicNumber     String?
+  drivingLicense String?
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  listings       Car[]
+  bookings       Booking[]
+  reviewsGiven   Review[]  @relation("ReviewsGiven")
+  reviewsReceived Review[] @relation("ReviewsReceived")
+  disputesRaised Dispute[] @relation("DisputesRaised")
+}
+
+model Car {
+  id           String    @id @default(uuid())
+  ownerId      String
+  owner        User      @relation(fields: [ownerId], references: [id])
+  make         String
+  model        String
+  year         Int
+  plateNumber  String    @unique
+  city         City
+  basePrice    Float     // Owner's base rate per day
+  images       String[]  // Array of image paths/URLs
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  bookings     Booking[]
+
+  @@index([ownerId])
+  @@index([city])
+}
+
+model Booking {
+  id                 String        @id @default(uuid())
+  carId              String
+  car                Car           @relation(fields: [carId], references: [id])
+  renterId           String
+  renter             User          @relation(fields: [renterId], references: [id])
+  startDate          DateTime
+  endDate            DateTime
+  status             BookingStatus @default(PENDING_APPROVAL)
+  totalPrice         Float         // Final calculated dynamic price
+  securityDeposit    Float         // Deposit amount based on risk tier
+  
+  // Cancellation & Refunds
+  cancellationReason String?
+  refundStatus       RefundStatus  @default(NONE)
+  
+  // Payment Verification
+  paymentMethod      PaymentMethod
+  paymentReceipt     String?       // Path to manual upload receipt (if IBFT)
+  
+  // Inspection Photo Records
+  preTripPhotos      Json?         // { front, back, left, right, interior, odometer }
+  postTripPhotos     Json?         // { front, back, left, right, interior, odometer }
+  
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  // Relations
+  riskAssessment     RiskAssessment?
+  damageReport       DamageReport?
+  reviews            Review[]
+  dispute            Dispute?
+
+  @@index([carId])
+  @@index([renterId])
+  @@index([startDate, endDate])
+}
+
+model RiskAssessment {
+  id             String    @id @default(uuid())
+  bookingId      String    @unique
+  booking        Booking   @relation(fields: [bookingId], references: [id])
+  
+  // Model Inputs Snapshot
+  renterAge      Int
+  licenseYears   Int
+  hasPastDisputes Boolean
+  isVerified     Boolean
+  
+  // Model Outputs
+  score          Float     // Raw probability score [0.0, 1.0]
+  tier           RiskTier
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model DamageReport {
+  id              String    @id @default(uuid())
+  bookingId       String    @unique
+  booking         Booking   @relation(fields: [bookingId], references: [id])
+  
+  similarityScore Float     // Global structural similarity score [0.0 - 1.0]
+  
+  // Flagged zones array: [{ angle: "front", bbox: [x1, y1, x2, y2], confidence: 0.85 }]
+  flaggedRegions  Json?     
+  resultImage     String?   // Overlaid difference heatmap visual
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Dispute {
+  id             String        @id @default(uuid())
+  bookingId      String        @unique
+  booking        Booking       @relation(fields: [bookingId], references: [id])
+  raisedById     String
+  raisedBy       User          @relation("DisputesRaised", fields: [raisedById], references: [id])
+  reason         String
+  status         DisputeStatus @default(OPEN)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([raisedById])
+}
+
+model Review {
+  id            String    @id @default(uuid())
+  bookingId     String
+  booking       Booking   @relation(fields: [bookingId], references: [id])
+  
+  reviewerId    String
+  reviewer      User      @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  revieweeId    String
+  reviewee      User      @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+  
+  rating        Int       // 1 to 5 stars
+  comment       String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([bookingId])
+  @@index([reviewerId])
+  @@index([revieweeId])
+}
