@@ -1,0 +1,175 @@
+import { NextResponse } from "next/server";
+import { prisma } from "../../../lib/prisma";
+import { PaymentMethod, BookingStatus } from "@prisma/client";
+import { getAuthenticatedUser } from "../../../lib/auth";
+
+// Simple 32-bit FNV-1a or standard hash function to convert string to signed 32-bit integer
+function hashStringToInt32(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0; // Convert to signed 32-bit integer
+  }
+  return hash;
+}
+
+export async function POST(request: Request) {
+  try {
+    const user = getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized. Valid session token is required." },
+        { status: 401 }
+      );
+    }
+    const renterId = user.userId;
+
+    const body = await request.json();
+    const { carId, startDate, endDate, totalPrice, securityDeposit, paymentMethod } = body;
+
+    // Field validation
+    if (!carId || !startDate || !endDate || totalPrice === undefined || securityDeposit === undefined || !paymentMethod) {
+      return NextResponse.json(
+        { error: "Missing required fields: carId, startDate, endDate, totalPrice, securityDeposit, paymentMethod are mandatory." },
+        { status: 400 }
+      );
+    }
+
+    // Validate payment method enum
+    if (!Object.values(PaymentMethod).includes(paymentMethod as PaymentMethod)) {
+      return NextResponse.json(
+        { error: `Invalid paymentMethod. Allowed values are: ${Object.values(PaymentMethod).join(", ")}` },
+        { status: 400 }
+      );
+    }
+
+    const parsedStartDate = new Date(startDate);
+    const parsedEndDate = new Date(endDate);
+
+    if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid date format. Expected ISO-8601 strings." },
+        { status: 400 }
+      );
+    }
+
+    if (parsedStartDate > parsedEndDate) {
+      return NextResponse.json(
+        { error: "startDate cannot be after endDate." },
+        { status: 400 }
+      );
+    }
+
+    // Check if car exists
+    const car = await prisma.car.findUnique({
+      where: { id: carId },
+    });
+
+    if (!car) {
+      return NextResponse.json(
+        { error: "Car listing not found." },
+        { status: 400 }
+      );
+    }
+
+    // Prevent owners from renting their own vehicles (Business validation check)
+    if (car.ownerId === renterId) {
+      return NextResponse.json(
+        { error: "You cannot rent your own vehicle." },
+        { status: 400 }
+      );
+    }
+
+    // Hash values for 2-argument pg_advisory_xact_lock
+    const classId = hashStringToInt32("booking");
+    const objId = hashStringToInt32(carId);
+
+    const booking = await prisma.$transaction(async (tx) => {
+      // 1. Acquire transaction-level advisory lock
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${classId}, ${objId})`;
+
+      // 2. Perform safe, race-free overlap check
+      const overlapping = await tx.booking.findMany({
+        where: {
+          carId: carId,
+          status: {
+            in: [
+              BookingStatus.PENDING_PAYMENT,
+              BookingStatus.PAID,
+              BookingStatus.CHECKED_IN,
+              BookingStatus.ACTIVE,
+              BookingStatus.CHECKED_OUT,
+              BookingStatus.COMPLETED,
+            ],
+          },
+          OR: [
+            {
+              startDate: { lte: parsedEndDate },
+              endDate: { gte: parsedStartDate },
+            },
+          ],
+        },
+      });
+
+      if (overlapping.length > 0) {
+        throw new Error("OVERLAP_ERROR");
+      }
+
+      // 3. Create booking safely
+      return await tx.booking.create({
+        data: {
+          carId,
+          renterId,
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
+          totalPrice: Number(totalPrice),
+          securityDeposit: Number(securityDeposit),
+          paymentMethod: paymentMethod as PaymentMethod,
+          status: BookingStatus.PENDING_APPROVAL,
+        },
+      });
+    });
+
+    return NextResponse.json({ booking }, { status: 201 });
+  } catch (error: any) {
+    if (error.message === "OVERLAP_ERROR") {
+      return NextResponse.json(
+        { error: "This vehicle is already booked for the selected dates." },
+        { status: 400 }
+      );
+    }
+    console.error("Booking creation error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal server error during booking creation." },
+      { status: 500 }
+    );
+  }
+}
+
+// GET lists all bookings for the authenticated user (either as renter or owner)
+export async function GET(request: Request) {
+  try {
+    const user = getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized. Valid session token is required." },
+        { status: 401 }
+      );
+    }
+
+    // Fetch bookings where user is the renter
+    const bookings = await prisma.booking.findMany({
+      where: { renterId: user.userId },
+      include: { car: true },
+    });
+
+    return NextResponse.json({ bookings }, { status: 200 });
+  } catch (error: any) {
+    console.error("Booking list retrieval error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal server error during booking retrieval." },
+      { status: 500 }
+    );
+  }
+}

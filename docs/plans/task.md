@@ -10,4 +10,4 @@
 | phase3-task1 | Booking Request API Endpoint | x | |
 | phase3-task2 | Concurrency Lock and Double-Booking Prevention | x | |
 | phase3-task3 | Owner Booking Approval API Endpoint | x | |
-| phase3-task4 | Payment and Deposit Upload API Endpoint | pending | |
+| phase3-task4 | Payment and Deposit Upload API Endpoint | x | |
