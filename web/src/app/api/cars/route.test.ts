@@ -1,6 +1,7 @@
 import { expect, test, describe, vi, beforeEach } from "vitest";
 import { POST, GET } from "./route";
 import { prisma } from "../../../lib/prisma";
+import { signJwt } from "../../../lib/auth";
 
 vi.mock("../../../lib/prisma", () => {
   return {
@@ -18,9 +19,20 @@ vi.mock("../../../lib/prisma", () => {
 });
 
 describe("POST /api/cars", () => {
+  const jwtSecret = "test-jwt-secret-key-32-characters";
+  
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.JWT_SECRET = jwtSecret;
   });
+
+  const getAuthHeader = (userId: string) => {
+    const token = signJwt(
+      { userId, email: "owner@example.com", role: "USER" },
+      jwtSecret
+    );
+    return { Authorization: `Bearer ${token}` };
+  };
 
   test("creates a car listing successfully", async () => {
     vi.mocked(prisma.car.findUnique).mockResolvedValue(null);
@@ -42,7 +54,7 @@ describe("POST /api/cars", () => {
       method: "POST",
       body: JSON.stringify(requestBody),
       headers: {
-        "x-user-id": "owner-uuid",
+        ...getAuthHeader("owner-uuid"),
       },
     });
 
@@ -55,7 +67,40 @@ describe("POST /api/cars", () => {
     expect(prisma.car.create).toHaveBeenCalledTimes(1);
   });
 
-  test("returns 401 if x-user-id header is missing", async () => {
+  test("rejects spoofed x-user-id header and uses verified user session ID", async () => {
+    vi.mocked(prisma.car.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.car.create).mockImplementation(async (args: any) => {
+      return { id: "car-uuid", ...args.data };
+    });
+
+    const requestBody = {
+      make: "Honda",
+      model: "Civic",
+      year: 2022,
+      plateNumber: "LEB-1234",
+      city: "LAHORE",
+      basePrice: 5000,
+    };
+
+    const req = new Request("http://localhost/api/cars", {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+      headers: {
+        ...getAuthHeader("real-owner-uuid"),
+        "x-user-id": "spoofed-attacker-uuid", // Attacker tries to spoof x-user-id header
+      },
+    });
+
+    const response = await POST(req);
+    expect(response.status).toBe(201);
+
+    const body = await response.json();
+    // The created car ownerId must be real-owner-uuid, ignoring spoofed-attacker-uuid completely
+    expect(body.car.ownerId).toBe("real-owner-uuid");
+    expect(body.car.ownerId).not.toBe("spoofed-attacker-uuid");
+  });
+
+  test("returns 401 if Authorization token is missing", async () => {
     const requestBody = {
       make: "Honda",
       model: "Civic",
@@ -94,7 +139,7 @@ describe("POST /api/cars", () => {
       method: "POST",
       body: JSON.stringify(requestBody),
       headers: {
-        "x-user-id": "owner-uuid",
+        ...getAuthHeader("owner-uuid"),
       },
     });
 
@@ -120,7 +165,7 @@ describe("POST /api/cars", () => {
       method: "POST",
       body: JSON.stringify(requestBody),
       headers: {
-        "x-user-id": "owner-uuid",
+        ...getAuthHeader("owner-uuid"),
       },
     });
 
@@ -145,7 +190,7 @@ describe("POST /api/cars", () => {
       method: "POST",
       body: JSON.stringify(requestBody),
       headers: {
-        "x-user-id": "owner-uuid",
+        ...getAuthHeader("owner-uuid"),
       },
     });
 

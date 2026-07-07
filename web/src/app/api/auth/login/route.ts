@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import bcrypt from "bcrypt";
+import { signJwt } from "../../../../lib/auth";
 
 export async function POST(request: Request) {
   try {
@@ -36,8 +37,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate mock token/session payload for the portfolio project (to be replaced with NextAuth config in production)
-    const mockToken = `mock-session-token-for-${user.id}-${Date.now()}`;
+    // Generate real JWT token
+    const jwtSecret = process.env.JWT_SECRET || "fallback_default_jwt_secret_for_dev_32_bytes";
+    const token = signJwt(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+      },
+      jwtSecret
+    );
 
     // Return authenticated user profile (excluding passwordHash)
     const { passwordHash: _, ...userWithoutPassword } = user;
@@ -45,7 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         user: userWithoutPassword,
-        token: mockToken,
+        token: token,
       },
       { status: 200 }
     );

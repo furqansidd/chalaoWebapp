@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { City } from "@prisma/client";
+import { getAuthenticatedUser } from "../../../lib/auth";
 
 export async function POST(request: Request) {
   try {
-    const ownerId = request.headers.get("x-user-id");
-    if (!ownerId) {
+    const user = getAuthenticatedUser(request);
+    if (!user) {
       return NextResponse.json(
-        { error: "Unauthorized. x-user-id header is required." },
+        { error: "Unauthorized. Valid session token is required." },
         { status: 401 }
       );
     }
+    const ownerId = user.userId;
 
     const body = await request.json();
     const { make, model, year, plateNumber, city, basePrice, images } = body;
