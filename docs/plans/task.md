@@ -11,3 +11,6 @@
 | phase3-task2 | Concurrency Lock and Double-Booking Prevention | x | |
 | phase3-task3 | Owner Booking Approval API Endpoint | x | |
 | phase3-task4 | Payment and Deposit Upload API Endpoint | x | |
+| phase4-task1 | Check-in Upload API Endpoint | x | |
+| phase4-task2 | Check-out Upload API Endpoint | pending | |
+| phase4-task3 | Background Worker and FastAPI CV Pipeline | pending | |
