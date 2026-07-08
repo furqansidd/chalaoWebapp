@@ -81,6 +81,77 @@ export async function POST(request: Request) {
       );
     }
 
+    // Parse renter age and license years (provide defaults for compatibility)
+    const renterAge = body.renterAge !== undefined ? Number(body.renterAge) : 25;
+    const licenseYears = body.licenseYears !== undefined ? Number(body.licenseYears) : 5;
+
+    // Retrieve renter profile details
+    const renterUser = await prisma.user.findUnique({
+      where: { id: renterId },
+    });
+    const isVerified = renterUser ? renterUser.isVerified : false;
+
+    // Query renter past dispute counts (computable metrics)
+    const disputeCount = await prisma.dispute.count({
+      where: { raisedById: renterId },
+    });
+    const hasPastDisputes = disputeCount > 0;
+
+    // ML dynamic pricing & risk assessment fetch
+    let riskScore = 0.2;
+    let riskTier = "LOW";
+    let dynamicDailyRate = car.basePrice;
+    let suggestedDeposit = car.basePrice;
+
+    try {
+      const mlServiceUrl = process.env.ML_SERVICE_URL || "http://localhost:8000";
+      const mlResponse = await fetch(`${mlServiceUrl}/api/v1/pricing-and-risk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          renter_age: renterAge,
+          license_years: licenseYears,
+          has_disputes: hasPastDisputes,
+          is_verified: isVerified,
+          base_price: car.basePrice,
+          city: car.city,
+        }),
+      });
+
+      if (mlResponse.ok) {
+        const mlData = await mlResponse.json();
+        riskScore = mlData.riskScore;
+        riskTier = mlData.riskTier;
+        dynamicDailyRate = mlData.dynamicDailyRate;
+        suggestedDeposit = mlData.suggestedDeposit;
+      } else {
+        throw new Error("FastAPI pricing & risk error status");
+      }
+    } catch (err) {
+      console.warn("ML Service offline, falling back to local heuristic:", err);
+      // Local fallback pricing & risk logic
+      riskScore = 0.2;
+      if (licenseYears < 2) riskScore += 0.5;
+      if (hasPastDisputes) riskScore += 0.3;
+      if (isVerified) riskScore -= 0.15;
+      riskScore = Math.min(Math.max(riskScore, 0.0), 1.0);
+
+      if (riskScore >= 0.65) riskTier = "HIGH";
+      else if (riskScore >= 0.35) riskTier = "MEDIUM";
+
+      const cityMultipliers: Record<string, number> = { KARACHI: 1.10, LAHORE: 1.05, ISLAMABAD: 1.00 };
+      const cityMult = cityMultipliers[car.city] ?? 1.00;
+      const riskMult = riskTier === "HIGH" ? 1.20 : (riskTier === "MEDIUM" ? 1.08 : 1.00);
+
+      dynamicDailyRate = car.basePrice * cityMult * riskMult;
+      suggestedDeposit = car.basePrice * (riskTier === "HIGH" ? 2.0 : (riskTier === "MEDIUM" ? 1.5 : 1.0));
+    }
+
+    // Compute rental duration in days
+    const diffTime = Math.abs(parsedEndDate.getTime() - parsedStartDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+    const computedTotalPrice = dynamicDailyRate * diffDays;
+
     // Hash values for 2-argument pg_advisory_xact_lock
     const classId = hashStringToInt32("booking");
     const objId = hashStringToInt32(carId);
@@ -116,17 +187,27 @@ export async function POST(request: Request) {
         throw new Error("OVERLAP_ERROR");
       }
 
-      // 3. Create booking safely
+      // 3. Create booking and risk assessment snapshot safely
       return await tx.booking.create({
         data: {
           carId,
           renterId,
           startDate: parsedStartDate,
           endDate: parsedEndDate,
-          totalPrice: Number(totalPrice),
-          securityDeposit: Number(securityDeposit),
+          totalPrice: Number(computedTotalPrice),
+          securityDeposit: Number(suggestedDeposit),
           paymentMethod: paymentMethod as PaymentMethod,
           status: BookingStatus.PENDING_APPROVAL,
+          riskAssessment: {
+            create: {
+              renterAge,
+              licenseYears,
+              hasPastDisputes,
+              isVerified,
+              score: riskScore,
+              tier: riskTier as any,
+            }
+          }
         },
       });
     });

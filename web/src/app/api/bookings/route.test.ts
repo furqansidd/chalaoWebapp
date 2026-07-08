@@ -13,6 +13,12 @@ vi.mock("../../../lib/prisma", () => {
         findMany: vi.fn(),
         create: vi.fn(),
       },
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ id: "renter-uuid", isVerified: true }),
+      },
+      dispute: {
+        count: vi.fn().mockResolvedValue(0),
+      },
       $transaction: vi.fn(),
     },
   };
@@ -187,5 +193,64 @@ describe("POST /api/bookings", () => {
 
     const body = await response.json();
     expect(body.error).toContain("cannot rent your own vehicle");
+  });
+
+  test("runs local risk assessment fallback and includes riskAssessment relations during booking creation", async () => {
+    vi.mocked(prisma.car.findUnique).mockResolvedValue({
+      id: "car-uuid",
+      ownerId: "owner-uuid",
+      basePrice: 5000,
+      city: "ISLAMABAD",
+    } as any);
+
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "renter-uuid",
+      isVerified: false, // Unverified triggers higher risk
+    } as any);
+
+    // Mock prisma.$transaction to return custom callback
+    let passedData: any = null;
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
+      const mockTx = {
+        $executeRaw: vi.fn(),
+        booking: {
+          findMany: vi.fn().mockResolvedValue([]),
+          create: vi.fn().mockImplementation(async (args: any) => {
+            passedData = args.data;
+            return { id: "booking-uuid", ...args.data };
+          }),
+        },
+      };
+      return await callback(mockTx);
+    });
+
+    const requestBody = {
+      carId: "car-uuid",
+      startDate: "2026-08-10T12:00:00.000Z",
+      endDate: "2026-08-15T12:00:00.000Z",
+      totalPrice: 25000,
+      securityDeposit: 5000,
+      paymentMethod: "STRIPE",
+      renterAge: 20,         // high risk triggers
+      licenseYears: 1,       // high risk triggers
+    };
+
+    const req = new Request("http://localhost/api/bookings", {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+      headers: {
+        ...getAuthHeader("renter-uuid"),
+      },
+    });
+
+    const response = await POST(req);
+    expect(response.status).toBe(201);
+
+    // Verify RiskAssessment relation creation payload
+    expect(passedData).not.toBeNull();
+    expect(passedData.riskAssessment).toBeDefined();
+    expect(passedData.riskAssessment.create.renterAge).toBe(20);
+    expect(passedData.riskAssessment.create.licenseYears).toBe(1);
+    expect(passedData.riskAssessment.create.tier).toBe("HIGH"); // High risk due to age 20 & license 1
   });
 });
