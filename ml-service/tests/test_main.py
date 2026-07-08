@@ -70,3 +70,48 @@ def test_analyze_damage_with_real_images(tmp_path):
     flagged = data["flaggedRegions"][0]
     assert flagged["angle"] == "front"
     assert flagged["bbox"] is not None
+
+def test_pricing_and_risk_low_risk():
+    payload = {
+        "renter_age": 40,
+        "license_years": 15,
+        "has_disputes": False,
+        "is_verified": True,
+        "base_price": 5000.0,
+        "city": "ISLAMABAD"
+    }
+    
+    response = client.post("/api/v1/pricing-and-risk", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "riskScore" in data
+    assert "riskTier" in data
+    assert data["riskTier"] in ["LOW", "MEDIUM", "HIGH"]
+    assert "suggestedDeposit" in data
+    assert "dynamicDailyRate" in data
+    
+    # Low risk should have a low daily rate (close to base_price)
+    assert data["dynamicDailyRate"] >= 5000.0
+    assert data["dynamicDailyRate"] < 6000.0
+
+def test_pricing_and_risk_high_risk():
+    payload = {
+        "renter_age": 19,
+        "license_years": 1,
+        "has_disputes": True,
+        "is_verified": False,
+        "base_price": 5000.0,
+        "city": "KARACHI"
+    }
+    
+    response = client.post("/api/v1/pricing-and-risk", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "riskScore" in data
+    assert "riskTier" in data
+    assert "suggestedDeposit" in data
+    assert "dynamicDailyRate" in data
+    
+    # High risk should have premium charge
+    assert data["dynamicDailyRate"] > 5500.0
+

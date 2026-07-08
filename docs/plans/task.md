@@ -15,5 +15,5 @@
 | phase4-task2 | Check-out Upload API Endpoint | x | |
 | phase4-task3 | Background Worker and FastAPI CV Pipeline | x | |
 | phase5-task1 | Python ML Model Training Script | x | |
-| phase5-task2 | FastAPI Dynamic Pricing & Risk Scoring API Endpoint | pending | |
+| phase5-task2 | FastAPI Dynamic Pricing & Risk Scoring API Endpoint | x | |
 | phase5-task3 | Next.js Booking Creation ML Integration | pending | |
