@@ -34,4 +34,4 @@
 | phase9-task2 | Booking Detail & Action Page (Approve/Pay Flow) | x | |
 | phase10-task1 | Check-in/Check-out Form & Damage Report Display | x | |
 | phase11-task1 | Reviews and Disputes UI | x | |
-| phase11-task2 | Admin Console Dashboard | / | |
+| phase11-task2 | Admin Console Dashboard | x | |
