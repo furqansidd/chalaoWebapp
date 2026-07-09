@@ -32,3 +32,4 @@
 | phase8-task4 | Create Car Listing Form (Owner View) | x | |
 | phase9-task1 | Renter/Owner Switching Dashboard Page | x | |
 | phase9-task2 | Booking Detail & Action Page (Approve/Pay Flow) | x | |
+| phase10-task1 | Check-in/Check-out Form & Damage Report Display | x | |
