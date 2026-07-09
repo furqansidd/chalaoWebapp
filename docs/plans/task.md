@@ -21,3 +21,8 @@
 | phase6-task2 | Review Pipeline API Endpoints | x | |
 | phase6-task3 | Owner/Renter Switching Dashboard API | x | |
 | phase6-task4 | Admin Console API Endpoints | x | |
+| phase7-task1 | Component Testing Setup | x | |
+| phase7-task2 | Design System Styling (Global CSS) | x | |
+| phase7-task3 | AuthContext and AuthProvider | x | |
+| phase7-task4 | Shared Layout & Navigation Header | x | |
+| phase7-task5 | Authentication Pages (Login & Register) | x | |
