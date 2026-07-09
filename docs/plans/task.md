@@ -26,3 +26,7 @@
 | phase7-task3 | AuthContext and AuthProvider | x | |
 | phase7-task4 | Shared Layout & Navigation Header | x | |
 | phase7-task5 | Authentication Pages (Login & Register) | x | |
+| phase8-task1 | Create Single Car Retrieval API Endpoint | x | |
+| phase8-task2 | Car Browse & Search Page (Main Page) | x | |
+| phase8-task3 | Car Detail Page (Renter Form View) | x | |
+| phase8-task4 | Create Car Listing Form (Owner View) | x | |
