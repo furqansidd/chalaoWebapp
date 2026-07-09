@@ -55,6 +55,11 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
   const [photoInterior, setPhotoInterior] = useState("");
   const [photoOdometer, setPhotoOdometer] = useState("");
 
+  // Review & Dispute states
+  const [rating, setRating] = useState("5");
+  const [comment, setComment] = useState("");
+  const [disputeReason, setDisputeReason] = useState("");
+
   const fetchBooking = async () => {
     if (!token) return;
     try {
@@ -230,6 +235,74 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
       fetchBooking();
     } catch (err: any) {
       setError(err.message || "An error occurred during check-out.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setActionLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/reviews`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          rating: parseInt(rating, 10),
+          comment,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Review submission failed.");
+      }
+
+      setSuccessMsg("Review submitted successfully!");
+      setComment("");
+    } catch (err: any) {
+      setError(err.message || "An error occurred while submitting review.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDispute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setActionLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/dispute`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          reason: disputeReason,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Dispute filing failed.");
+      }
+
+      setSuccessMsg("Dispute filed successfully!");
+      setDisputeReason("");
+      fetchBooking();
+    } catch (err: any) {
+      setError(err.message || "An error occurred while filing dispute.");
     } finally {
       setActionLoading(false);
     }
@@ -594,6 +667,64 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
                 </div>
                 <button type="submit" className="btn btn-primary" style={{ width: "100%", padding: "12px" }} disabled={actionLoading}>
                   {actionLoading ? "Submitting Check-out..." : "Submit Post-Trip Photos"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {isRenter && booking.status === "COMPLETED" && (
+            <div style={{ marginTop: "32px", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "24px" }}>
+              <h4 style={{ fontSize: "16px", marginBottom: "16px" }}>Leave a Review</h4>
+              <form onSubmit={handleReview}>
+                <div className="form-group">
+                  <label htmlFor="rating" className="form-label">Rating (1-5)</label>
+                  <input
+                    id="rating"
+                    type="number"
+                    min="1"
+                    max="5"
+                    className="form-input"
+                    required
+                    value={rating}
+                    onChange={(e) => setRating(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: "20px" }}>
+                  <label htmlFor="comment" className="form-label">Comments</label>
+                  <textarea
+                    id="comment"
+                    className="form-input"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Describe your rental experience..."
+                    style={{ minHeight: "80px", resize: "vertical" }}
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ width: "100%", padding: "12px" }} disabled={actionLoading}>
+                  Submit Review
+                </button>
+              </form>
+            </div>
+          )}
+
+          {isRenter && (booking.status === "COMPLETED" || booking.status === "CHECKED_OUT") && (
+            <div style={{ marginTop: "32px", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "24px" }}>
+              <h4 style={{ fontSize: "16px", marginBottom: "16px" }}>File a Dispute</h4>
+              <form onSubmit={handleDispute}>
+                <div className="form-group" style={{ marginBottom: "20px" }}>
+                  <label htmlFor="disputeReason" className="form-label">Dispute Reason</label>
+                  <textarea
+                    id="disputeReason"
+                    className="form-input"
+                    required
+                    value={disputeReason}
+                    onChange={(e) => setDisputeReason(e.target.value)}
+                    placeholder="Explain the issue with the trip or charges..."
+                    style={{ minHeight: "80px", resize: "vertical" }}
+                  />
+                </div>
+                <button type="submit" className="btn btn-secondary" style={{ width: "100%", padding: "12px", color: "var(--error)", borderColor: "rgba(239, 68, 68, 0.2)" }} disabled={actionLoading}>
+                  Submit Dispute
                 </button>
               </form>
             </div>

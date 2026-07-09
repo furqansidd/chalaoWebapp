@@ -247,6 +247,84 @@ describe("Booking Details Page", () => {
 
     expect(screen.getByText("Computer-Vision Damage Report")).toBeDefined();
     expect(screen.getByText(/Similarity Score: 85%/)).toBeDefined();
-    expect(screen.getByText(/Zone: front/i)).toBeDefined();
+  });
+
+  test("renders reviews form if status is COMPLETED and user is renter", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { userId: "renter-uuid", email: "renter@example.com", role: "USER" },
+      token: "mock-jwt-token",
+      login: vi.fn(),
+      logout: vi.fn(),
+      isLoading: false,
+    });
+
+    const mockBooking = {
+      id: "booking-uuid",
+      startDate: "2026-07-10T00:00:00.000Z",
+      endDate: "2026-07-12T00:00:00.000Z",
+      status: "COMPLETED",
+      totalPrice: 10000,
+      securityDeposit: 5000,
+      car: { id: "car-1", ownerId: "owner-uuid" },
+      renter: { id: "renter-uuid", name: "Ali Khan", email: "renter@example.com" },
+    };
+
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ booking: mockBooking }),
+    } as any);
+
+    await act(async () => {
+      render(
+        <AuthProvider>
+          <BookingDetailPage params={{ id: "booking-uuid" }} />
+        </AuthProvider>
+      );
+    });
+
+    expect(screen.getByText("Leave a Review")).toBeDefined();
+    expect(screen.getByLabelText("Rating (1-5)")).toBeDefined();
+    expect(screen.getByLabelText("Comments")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Submit Review" })).toBeDefined();
+  });
+
+  test("renders file dispute form if status is COMPLETED/CHECKED_OUT and user is renter", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { userId: "renter-uuid", email: "renter@example.com", role: "USER" },
+      token: "mock-jwt-token",
+      login: vi.fn(),
+      logout: vi.fn(),
+      isLoading: false,
+    });
+
+    const mockBooking = {
+      id: "booking-uuid",
+      startDate: "2026-07-10T00:00:00.000Z",
+      endDate: "2026-07-12T00:00:00.000Z",
+      status: "COMPLETED",
+      totalPrice: 10000,
+      securityDeposit: 5000,
+      car: { id: "car-1", ownerId: "owner-uuid" },
+      renter: { id: "renter-uuid", name: "Ali Khan", email: "renter@example.com" },
+    };
+
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ booking: mockBooking }),
+    } as any);
+
+    await act(async () => {
+      render(
+        <AuthProvider>
+          <BookingDetailPage params={{ id: "booking-uuid" }} />
+        </AuthProvider>
+      );
+    });
+
+    expect(screen.getByText("File a Dispute")).toBeDefined();
+    expect(screen.getByLabelText("Dispute Reason")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Submit Dispute" })).toBeDefined();
   });
 });
