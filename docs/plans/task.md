@@ -35,3 +35,4 @@
 | phase10-task1 | Check-in/Check-out Form & Damage Report Display | x | |
 | phase11-task1 | Reviews and Disputes UI | x | |
 | phase11-task2 | Admin Console Dashboard | x | |
+| phase12-task1 | Polish visual states, responsive checks, and E2E Tests | x | |
