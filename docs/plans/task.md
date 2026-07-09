@@ -30,3 +30,5 @@
 | phase8-task2 | Car Browse & Search Page (Main Page) | x | |
 | phase8-task3 | Car Detail Page (Renter Form View) | x | |
 | phase8-task4 | Create Car Listing Form (Owner View) | x | |
+| phase9-task1 | Renter/Owner Switching Dashboard Page | x | |
+| phase9-task2 | Booking Detail & Action Page (Approve/Pay Flow) | x | |
