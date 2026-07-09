@@ -18,6 +18,6 @@
 | phase5-task2 | FastAPI Dynamic Pricing & Risk Scoring API Endpoint | x | |
 | phase5-task3 | Next.js Booking Creation ML Integration | x | |
 | phase6-task1 | Dispute Pipeline API Endpoints | x | |
-| phase6-task2 | Review Pipeline API Endpoints | pending | |
+| phase6-task2 | Review Pipeline API Endpoints | x | |
 | phase6-task3 | Owner/Renter Switching Dashboard API | pending | |
 | phase6-task4 | Admin Console API Endpoints | pending | |
