@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import bcrypt from "bcrypt";
-import { signJwt } from "../../../../lib/auth";
+import { signJwt, getJwtSecret } from "../../../../lib/auth";
 
 export async function POST(request: Request) {
   try {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     }
 
     // Generate real JWT token
-    const jwtSecret = process.env.JWT_SECRET || "fallback_default_jwt_secret_for_dev_32_bytes";
+    const jwtSecret = getJwtSecret();
     const token = signJwt(
       {
         userId: user.id,

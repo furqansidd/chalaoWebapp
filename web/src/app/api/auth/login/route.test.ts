@@ -19,6 +19,7 @@ describe("POST /api/auth/login", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    process.env.JWT_SECRET = "test-jwt-secret-key-32-characters";
     passwordHash = await bcrypt.hash(password, 10);
   });
 

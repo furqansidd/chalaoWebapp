@@ -1,5 +1,18 @@
 import crypto from "crypto";
 
+// Startup check: Must throw error if JWT_SECRET is not set in non-test environments
+if (!process.env.JWT_SECRET && process.env.NODE_ENV !== "test") {
+  throw new Error("FATAL: JWT_SECRET environment variable is not set.");
+}
+
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("FATAL: JWT_SECRET environment variable is not set.");
+  }
+  return secret;
+}
+
 function base64url(str: string | Buffer, encoding: BufferEncoding = "utf8"): string {
   const buf = typeof str === "string" ? Buffer.from(str, encoding) : str;
   return buf.toString("base64")
@@ -53,7 +66,15 @@ export function verifyJwt(token: string, secret: string): UserSessionPayload | n
     const signatureInput = `${header}.${payload}`;
     const expectedSignature = base64url(crypto.createHmac("sha256", secret).update(signatureInput).digest());
     
-    if (signature !== expectedSignature) return null;
+    // Timing safe comparison to prevent timing attacks
+    const sigBuf = Buffer.from(signature, "utf8");
+    const expectedBuf = Buffer.from(expectedSignature, "utf8");
+    if (sigBuf.length !== expectedBuf.length) {
+      return null;
+    }
+    if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+      return null;
+    }
     
     const decodedPayload = JSON.parse(base64urlDecode(payload));
     if (decodedPayload.exp && decodedPayload.exp < Math.floor(Date.now() / 1000)) {
@@ -79,6 +100,6 @@ export function getAuthenticatedUser(request: Request): UserSessionPayload | nul
     return null;
   }
   const token = authHeader.substring(7);
-  const secret = process.env.JWT_SECRET || "fallback_default_jwt_secret_for_dev_32_bytes";
+  const secret = getJwtSecret();
   return verifyJwt(token, secret);
 }
