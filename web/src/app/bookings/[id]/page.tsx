@@ -47,6 +47,14 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
   const [payMethod, setPayMethod] = useState<"STRIPE" | "IBFT" >("STRIPE");
   const [receiptPath, setReceiptPath] = useState("");
 
+  // Photo uploads states
+  const [photoFront, setPhotoFront] = useState("");
+  const [photoBack, setPhotoBack] = useState("");
+  const [photoLeft, setPhotoLeft] = useState("");
+  const [photoRight, setPhotoRight] = useState("");
+  const [photoInterior, setPhotoInterior] = useState("");
+  const [photoOdometer, setPhotoOdometer] = useState("");
+
   const fetchBooking = async () => {
     if (!token) return;
     try {
@@ -142,6 +150,86 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
       fetchBooking();
     } catch (err: any) {
       setError(err.message || "An error occurred during payment.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCheckIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setActionLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/checkin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          preTripPhotos: {
+            front: photoFront,
+            back: photoBack,
+            left: photoLeft,
+            right: photoRight,
+            interior: photoInterior,
+            odometer: photoOdometer,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Check-in failed.");
+      }
+
+      setSuccessMsg("Pre-trip check-in completed successfully!");
+      fetchBooking();
+    } catch (err: any) {
+      setError(err.message || "An error occurred during check-in.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCheckOut = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setActionLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          postTripPhotos: {
+            front: photoFront,
+            back: photoBack,
+            left: photoLeft,
+            right: photoRight,
+            interior: photoInterior,
+            odometer: photoOdometer,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Check-out failed.");
+      }
+
+      setSuccessMsg("Post-trip check-out submitted successfully!");
+      fetchBooking();
+    } catch (err: any) {
+      setError(err.message || "An error occurred during check-out.");
     } finally {
       setActionLoading(false);
     }
@@ -316,6 +404,37 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
               </div>
             </div>
           </div>
+
+          {/* Computer-Vision Damage Report */}
+          {booking.damageReport && (
+            <div className="glass-panel" style={{ padding: "32px" }}>
+              <h3 style={{ fontSize: "18px", marginBottom: "16px" }}>Computer-Vision Damage Report</h3>
+              <p style={{ fontSize: "15px", fontWeight: 600, color: "var(--warning)", marginBottom: "16px" }}>
+                Similarity Score: {Math.round(booking.damageReport.similarityScore * 100)}%
+              </p>
+              {booking.damageReport.resultImage && (
+                <div style={{ marginBottom: "20px", border: "1px solid var(--border)", borderRadius: "8px", overflow: "hidden" }}>
+                  <img
+                    src={booking.damageReport.resultImage}
+                    alt="Damage Analysis Heatmap"
+                    style={{ width: "100%", height: "auto", display: "block" }}
+                  />
+                </div>
+              )}
+              <div>
+                <span style={{ fontSize: "12px", color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Flagged Regions
+                </span>
+                <ul style={{ listStyleType: "none", padding: 0, marginTop: "8px" }}>
+                  {(booking.damageReport.flaggedRegions as any[] || []).map((r, idx) => (
+                    <li key={idx} style={{ fontSize: "14px", color: "var(--error)", marginBottom: "6px" }}>
+                      • Zone: {r.angle} (Confidence: {Math.round(r.confidence * 100)}%)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action Panel Column */}
@@ -404,10 +523,80 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
             </p>
           )}
 
-          {booking.status === "PAID" && (
+          {booking.status === "PAID" && !isRenter && (
             <p style={{ color: "var(--success)", fontSize: "14px", fontWeight: 500, lineHeight: "1.5" }}>
-              ✓ Booking fully paid. Ready for trip check-in.
+              ✓ Booking fully paid. Awaiting renter trip check-in.
             </p>
+          )}
+
+          {isRenter && booking.status === "PAID" && (
+            <div>
+              <h4 style={{ fontSize: "16px", marginBottom: "16px" }}>Start Pre-Trip Inspection</h4>
+              <form onSubmit={handleCheckIn}>
+                <div className="form-group">
+                  <label htmlFor="frontPhoto" className="form-label">Front Photo Path</label>
+                  <input id="frontPhoto" type="text" className="form-input" required value={photoFront} onChange={(e) => setPhotoFront(e.target.value)} placeholder="e.g. /photos/pre-front.jpg" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="backPhoto" className="form-label">Back Photo Path</label>
+                  <input id="backPhoto" type="text" className="form-input" required value={photoBack} onChange={(e) => setPhotoBack(e.target.value)} placeholder="e.g. /photos/pre-back.jpg" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="leftPhoto" className="form-label">Left Photo Path</label>
+                  <input id="leftPhoto" type="text" className="form-input" required value={photoLeft} onChange={(e) => setPhotoLeft(e.target.value)} placeholder="e.g. /photos/pre-left.jpg" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="rightPhoto" className="form-label">Right Photo Path</label>
+                  <input id="rightPhoto" type="text" className="form-input" required value={photoRight} onChange={(e) => setPhotoRight(e.target.value)} placeholder="e.g. /photos/pre-right.jpg" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="interiorPhoto" className="form-label">Interior Photo Path</label>
+                  <input id="interiorPhoto" type="text" className="form-input" required value={photoInterior} onChange={(e) => setPhotoInterior(e.target.value)} placeholder="e.g. /photos/pre-interior.jpg" />
+                </div>
+                <div className="form-group" style={{ marginBottom: "20px" }}>
+                  <label htmlFor="odometerPhoto" className="form-label">Odometer Photo Path</label>
+                  <input id="odometerPhoto" type="text" className="form-input" required value={photoOdometer} onChange={(e) => setPhotoOdometer(e.target.value)} placeholder="e.g. /photos/pre-odometer.jpg" />
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ width: "100%", padding: "12px" }} disabled={actionLoading}>
+                  {actionLoading ? "Submitting Check-in..." : "Submit Pre-Trip Photos"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {isRenter && booking.status === "ACTIVE" && (
+            <div>
+              <h4 style={{ fontSize: "16px", marginBottom: "16px" }}>Start Post-Trip Inspection</h4>
+              <form onSubmit={handleCheckOut}>
+                <div className="form-group">
+                  <label htmlFor="frontPhoto" className="form-label">Front Photo Path</label>
+                  <input id="frontPhoto" type="text" className="form-input" required value={photoFront} onChange={(e) => setPhotoFront(e.target.value)} placeholder="e.g. /photos/post-front.jpg" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="backPhoto" className="form-label">Back Photo Path</label>
+                  <input id="backPhoto" type="text" className="form-input" required value={photoBack} onChange={(e) => setPhotoBack(e.target.value)} placeholder="e.g. /photos/post-back.jpg" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="leftPhoto" className="form-label">Left Photo Path</label>
+                  <input id="leftPhoto" type="text" className="form-input" required value={photoLeft} onChange={(e) => setPhotoLeft(e.target.value)} placeholder="e.g. /photos/post-left.jpg" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="rightPhoto" className="form-label">Right Photo Path</label>
+                  <input id="rightPhoto" type="text" className="form-input" required value={photoRight} onChange={(e) => setPhotoRight(e.target.value)} placeholder="e.g. /photos/post-right.jpg" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="interiorPhoto" className="form-label">Interior Photo Path</label>
+                  <input id="interiorPhoto" type="text" className="form-input" required value={photoInterior} onChange={(e) => setPhotoInterior(e.target.value)} placeholder="e.g. /photos/post-interior.jpg" />
+                </div>
+                <div className="form-group" style={{ marginBottom: "20px" }}>
+                  <label htmlFor="odometerPhoto" className="form-label">Odometer Photo Path</label>
+                  <input id="odometerPhoto" type="text" className="form-input" required value={photoOdometer} onChange={(e) => setPhotoOdometer(e.target.value)} placeholder="e.g. /photos/post-odometer.jpg" />
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ width: "100%", padding: "12px" }} disabled={actionLoading}>
+                  {actionLoading ? "Submitting Check-out..." : "Submit Post-Trip Photos"}
+                </button>
+              </form>
+            </div>
           )}
         </div>
       </div>
