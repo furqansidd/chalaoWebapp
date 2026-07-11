@@ -4,6 +4,12 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/AuthContext";
 import Link from "next/link";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
+import StripeForm from "./StripeForm";
+import ImageUpload from "./ImageUpload";
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string);
 
 interface Booking {
   id: string;
@@ -14,6 +20,11 @@ interface Booking {
   securityDeposit: number;
   paymentMethod?: string;
   paymentReceipt?: string;
+  damageReport?: {
+    similarityScore: number;
+    resultImage?: string;
+    flaggedRegions?: any[];
+  };
   car: {
     id: string;
     make: string;
@@ -60,6 +71,21 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
   const [comment, setComment] = useState("");
   const [disputeReason, setDisputeReason] = useState("");
 
+  const [clientSecret, setClientSecret] = useState("");
+
+  useEffect(() => {
+    if (booking?.status === "PENDING_PAYMENT" && payMethod === "STRIPE" && booking.totalPrice) {
+      fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // amount in cents
+        body: JSON.stringify({ amount: Math.round(booking.totalPrice * 100) }), 
+      })
+        .then((res) => res.json())
+        .then((data) => setClientSecret(data.clientSecret));
+    }
+  }, [booking?.status, payMethod, booking?.totalPrice]);
+
   const fetchBooking = async () => {
     if (!token) return;
     try {
@@ -101,10 +127,12 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
 
     try {
       const res = await fetch(`/api/bookings/${bookingId}/approve`, {
-        method: "POST",
+        method: "PATCH",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ approved: true }),
       });
 
       const data = await res.json();
@@ -539,25 +567,36 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
           {isRenter && booking.status === "PENDING_PAYMENT" && (
             <div>
               <h4 style={{ fontSize: "16px", marginBottom: "16px" }}>Make Payment</h4>
-              <form onSubmit={handlePay}>
-                <div className="form-group">
-                  <label htmlFor="payMethod" className="form-label">Payment Method</label>
-                  <select
-                    id="payMethod"
-                    className="form-input"
-                    value={payMethod}
-                    onChange={(e: any) => setPayMethod(e.target.value)}
-                    style={{
-                      appearance: "none",
-                      background: "rgba(255, 255, 255, 0.03) url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207.5L10%2012.5L15%207.5%22%20stroke%3D%22%239CA3AF%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E') no-repeat right 16px center",
-                    }}
-                  >
-                    <option value="STRIPE" style={{ background: "#0b0f19" }}>Credit Card (Stripe)</option>
-                    <option value="IBFT" style={{ background: "#0b0f19" }}>Bank Transfer (IBFT)</option>
-                  </select>
-                </div>
+              <div className="form-group" style={{ marginBottom: "16px" }}>
+                <label htmlFor="payMethod" className="form-label">Payment Method</label>
+                <select
+                  id="payMethod"
+                  className="form-input"
+                  value={payMethod}
+                  onChange={(e: any) => setPayMethod(e.target.value)}
+                  style={{
+                    appearance: "none",
+                    background: "rgba(255, 255, 255, 0.03) url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207.5L10%2012.5L15%207.5%22%20stroke%3D%22%239CA3AF%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E') no-repeat right 16px center",
+                  }}
+                >
+                  <option value="STRIPE" style={{ background: "#0b0f19" }}>Credit Card (Stripe)</option>
+                  <option value="IBFT" style={{ background: "#0b0f19" }}>Bank Transfer (IBFT)</option>
+                </select>
+              </div>
 
-                {payMethod === "IBFT" && (
+              {payMethod === "STRIPE" ? (
+                clientSecret ? (
+                  <Elements options={{ clientSecret, appearance: { theme: 'night' } }} stripe={stripePromise}>
+                    <StripeForm onSuccess={() => {
+                      const e = { preventDefault: () => {} } as React.FormEvent;
+                      handlePay(e);
+                    }} />
+                  </Elements>
+                ) : (
+                  <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>Loading secure payment gateway...</p>
+                )
+              ) : (
+                <form onSubmit={handlePay}>
                   <div className="form-group" style={{ marginBottom: "20px" }}>
                     <label htmlFor="receiptPath" className="form-label">Receipt File Path</label>
                     <input
@@ -570,17 +609,16 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
                       onChange={(e) => setReceiptPath(e.target.value)}
                     />
                   </div>
-                )}
-
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ width: "100%", padding: "12px", marginTop: "8px" }}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? "Processing..." : payMethod === "IBFT" ? "Upload Receipt" : "Pay with Credit Card"}
-                </button>
-              </form>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ width: "100%", padding: "12px", marginTop: "8px" }}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? "Processing..." : "Upload Receipt"}
+                  </button>
+                </form>
+              )}
             </div>
           )}
 
@@ -606,30 +644,13 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
             <div>
               <h4 style={{ fontSize: "16px", marginBottom: "16px" }}>Start Pre-Trip Inspection</h4>
               <form onSubmit={handleCheckIn}>
-                <div className="form-group">
-                  <label htmlFor="frontPhoto" className="form-label">Front Photo Path</label>
-                  <input id="frontPhoto" type="text" className="form-input" required value={photoFront} onChange={(e) => setPhotoFront(e.target.value)} placeholder="e.g. /photos/pre-front.jpg" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="backPhoto" className="form-label">Back Photo Path</label>
-                  <input id="backPhoto" type="text" className="form-input" required value={photoBack} onChange={(e) => setPhotoBack(e.target.value)} placeholder="e.g. /photos/pre-back.jpg" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="leftPhoto" className="form-label">Left Photo Path</label>
-                  <input id="leftPhoto" type="text" className="form-input" required value={photoLeft} onChange={(e) => setPhotoLeft(e.target.value)} placeholder="e.g. /photos/pre-left.jpg" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="rightPhoto" className="form-label">Right Photo Path</label>
-                  <input id="rightPhoto" type="text" className="form-input" required value={photoRight} onChange={(e) => setPhotoRight(e.target.value)} placeholder="e.g. /photos/pre-right.jpg" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="interiorPhoto" className="form-label">Interior Photo Path</label>
-                  <input id="interiorPhoto" type="text" className="form-input" required value={photoInterior} onChange={(e) => setPhotoInterior(e.target.value)} placeholder="e.g. /photos/pre-interior.jpg" />
-                </div>
-                <div className="form-group" style={{ marginBottom: "20px" }}>
-                  <label htmlFor="odometerPhoto" className="form-label">Odometer Photo Path</label>
-                  <input id="odometerPhoto" type="text" className="form-input" required value={photoOdometer} onChange={(e) => setPhotoOdometer(e.target.value)} placeholder="e.g. /photos/pre-odometer.jpg" />
-                </div>
+                <ImageUpload label="Front Photo" value={photoFront} onChange={setPhotoFront} required />
+                <ImageUpload label="Back Photo" value={photoBack} onChange={setPhotoBack} required />
+                <ImageUpload label="Left Photo" value={photoLeft} onChange={setPhotoLeft} required />
+                <ImageUpload label="Right Photo" value={photoRight} onChange={setPhotoRight} required />
+                <ImageUpload label="Interior Photo" value={photoInterior} onChange={setPhotoInterior} required />
+                <ImageUpload label="Odometer Photo" value={photoOdometer} onChange={setPhotoOdometer} required />
+                
                 <button type="submit" className="btn btn-primary" style={{ width: "100%", padding: "12px" }} disabled={actionLoading}>
                   {actionLoading ? "Submitting Check-in..." : "Submit Pre-Trip Photos"}
                 </button>
@@ -637,34 +658,17 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
             </div>
           )}
 
-          {isRenter && booking.status === "ACTIVE" && (
+          {isRenter && booking.status === "CHECKED_IN" && (
             <div>
               <h4 style={{ fontSize: "16px", marginBottom: "16px" }}>Start Post-Trip Inspection</h4>
               <form onSubmit={handleCheckOut}>
-                <div className="form-group">
-                  <label htmlFor="frontPhoto" className="form-label">Front Photo Path</label>
-                  <input id="frontPhoto" type="text" className="form-input" required value={photoFront} onChange={(e) => setPhotoFront(e.target.value)} placeholder="e.g. /photos/post-front.jpg" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="backPhoto" className="form-label">Back Photo Path</label>
-                  <input id="backPhoto" type="text" className="form-input" required value={photoBack} onChange={(e) => setPhotoBack(e.target.value)} placeholder="e.g. /photos/post-back.jpg" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="leftPhoto" className="form-label">Left Photo Path</label>
-                  <input id="leftPhoto" type="text" className="form-input" required value={photoLeft} onChange={(e) => setPhotoLeft(e.target.value)} placeholder="e.g. /photos/post-left.jpg" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="rightPhoto" className="form-label">Right Photo Path</label>
-                  <input id="rightPhoto" type="text" className="form-input" required value={photoRight} onChange={(e) => setPhotoRight(e.target.value)} placeholder="e.g. /photos/post-right.jpg" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="interiorPhoto" className="form-label">Interior Photo Path</label>
-                  <input id="interiorPhoto" type="text" className="form-input" required value={photoInterior} onChange={(e) => setPhotoInterior(e.target.value)} placeholder="e.g. /photos/post-interior.jpg" />
-                </div>
-                <div className="form-group" style={{ marginBottom: "20px" }}>
-                  <label htmlFor="odometerPhoto" className="form-label">Odometer Photo Path</label>
-                  <input id="odometerPhoto" type="text" className="form-input" required value={photoOdometer} onChange={(e) => setPhotoOdometer(e.target.value)} placeholder="e.g. /photos/post-odometer.jpg" />
-                </div>
+                <ImageUpload label="Front Photo" value={photoFront} onChange={setPhotoFront} required />
+                <ImageUpload label="Back Photo" value={photoBack} onChange={setPhotoBack} required />
+                <ImageUpload label="Left Photo" value={photoLeft} onChange={setPhotoLeft} required />
+                <ImageUpload label="Right Photo" value={photoRight} onChange={setPhotoRight} required />
+                <ImageUpload label="Interior Photo" value={photoInterior} onChange={setPhotoInterior} required />
+                <ImageUpload label="Odometer Photo" value={photoOdometer} onChange={setPhotoOdometer} required />
+
                 <button type="submit" className="btn btn-primary" style={{ width: "100%", padding: "12px" }} disabled={actionLoading}>
                   {actionLoading ? "Submitting Check-out..." : "Submit Post-Trip Photos"}
                 </button>

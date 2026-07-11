@@ -54,30 +54,37 @@ describe("Dashboard Page", () => {
       isLoading: false,
     });
 
-    const mockDashboardData = {
-      metrics: {
-        renter: { totalSpent: 12500, activeBookings: 2 },
-        owner: { totalEarnings: 0, activeBookings: 0, totalCars: 0 },
-      },
-      renterBookings: [
-        {
-          id: "booking-1",
-          startDate: "2026-07-10T00:00:00.000Z",
-          endDate: "2026-07-12T00:00:00.000Z",
-          totalPrice: 10000,
-          status: "PAID",
-          car: { make: "Toyota", model: "Corolla" },
-        },
-      ],
-      ownerBookings: [],
-      ownerCars: [],
-    };
-
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => mockDashboardData,
-    } as any);
+    vi.mocked(global.fetch).mockImplementation(async (url: any) => {
+      if (url.includes("role=renter")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            stats: { totalSpent: 12500, activeBookingsCount: 2 },
+            bookings: [
+              {
+                id: "booking-1",
+                startDate: "2026-07-10T00:00:00.000Z",
+                endDate: "2026-07-12T00:00:00.000Z",
+                totalPrice: 10000,
+                status: "PAID",
+                car: { make: "Toyota", model: "Corolla" },
+              },
+            ],
+          }),
+        } as any;
+      } else {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            stats: { totalEarnings: 0, pendingApprovalsCount: 0, carsCount: 0 },
+            bookings: [],
+            cars: [],
+          }),
+        } as any;
+      }
+    });
 
     await act(async () => {
       render(<DashboardPage />);
@@ -99,33 +106,40 @@ describe("Dashboard Page", () => {
       isLoading: false,
     });
 
-    const mockDashboardData = {
-      metrics: {
-        renter: { totalSpent: 0, activeBookings: 0 },
-        owner: { totalEarnings: 45000, activeBookings: 1, totalCars: 2 },
-      },
-      renterBookings: [],
-      ownerBookings: [
-        {
-          id: "booking-2",
-          startDate: "2026-07-15T00:00:00.000Z",
-          endDate: "2026-07-17T00:00:00.000Z",
-          totalPrice: 15000,
-          status: "PENDING_APPROVAL",
-          car: { make: "Honda", model: "Civic" },
-          renter: { name: "Ali Khan" },
-        },
-      ],
-      ownerCars: [
-        { id: "car-1", make: "Honda", model: "Civic", plateNumber: "AAA-1122" },
-      ],
-    };
-
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => mockDashboardData,
-    } as any);
+    vi.mocked(global.fetch).mockImplementation(async (url: any) => {
+      if (url.includes("role=renter")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            stats: { totalSpent: 0, activeBookingsCount: 0 },
+            bookings: [],
+          }),
+        } as any;
+      } else {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            stats: { totalEarnings: 45000, pendingApprovalsCount: 1, carsCount: 2 },
+            bookings: [
+              {
+                id: "booking-2",
+                startDate: "2026-07-15T00:00:00.000Z",
+                endDate: "2026-07-17T00:00:00.000Z",
+                totalPrice: 15000,
+                status: "PENDING_APPROVAL",
+                car: { make: "Honda", model: "Civic" },
+                renter: { name: "Ali Khan" },
+              },
+            ],
+            cars: [
+              { id: "car-1", make: "Honda", model: "Civic", plateNumber: "AAA-1122" },
+            ],
+          }),
+        } as any;
+      }
+    });
 
     await act(async () => {
       render(<DashboardPage />);
