@@ -61,19 +61,33 @@ export default function DashboardPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/dashboard", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const [renterRes, ownerRes] = await Promise.all([
+        fetch("/api/dashboard?role=renter", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/dashboard?role=owner", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      const renterJson = await renterRes.json();
+      const ownerJson = await ownerRes.json();
+
+      if (!renterRes.ok) throw new Error(renterJson.error || "Failed to load renter data.");
+      if (!ownerRes.ok) throw new Error(ownerJson.error || "Failed to load owner data.");
+
+      setData({
+        metrics: {
+          renter: {
+            totalSpent: renterJson.stats.totalSpent,
+            activeBookings: renterJson.stats.activeBookingsCount,
+          },
+          owner: {
+            totalEarnings: ownerJson.stats.totalEarnings,
+            activeBookings: ownerJson.stats.pendingApprovalsCount,
+            totalCars: ownerJson.stats.carsCount,
+          },
         },
+        renterBookings: renterJson.bookings,
+        ownerBookings: ownerJson.bookings,
+        ownerCars: ownerJson.cars,
       });
-
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to load dashboard data.");
-      }
-
-      setData(json);
     } catch (err: any) {
       setError(err.message || "An error occurred.");
     } finally {

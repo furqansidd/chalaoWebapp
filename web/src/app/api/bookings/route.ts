@@ -26,20 +26,12 @@ export async function POST(request: Request) {
     const renterId = user.userId;
 
     const body = await request.json();
-    const { carId, startDate, endDate, totalPrice, securityDeposit, paymentMethod } = body;
+    const { carId, startDate, endDate } = body;
 
     // Field validation
-    if (!carId || !startDate || !endDate || totalPrice === undefined || securityDeposit === undefined || !paymentMethod) {
+    if (!carId || !startDate || !endDate) {
       return NextResponse.json(
-        { error: "Missing required fields: carId, startDate, endDate, totalPrice, securityDeposit, paymentMethod are mandatory." },
-        { status: 400 }
-      );
-    }
-
-    // Validate payment method enum
-    if (!Object.values(PaymentMethod).includes(paymentMethod as PaymentMethod)) {
-      return NextResponse.json(
-        { error: `Invalid paymentMethod. Allowed values are: ${Object.values(PaymentMethod).join(", ")}` },
+        { error: "Missing required fields: carId, startDate, and endDate are mandatory." },
         { status: 400 }
       );
     }
@@ -158,7 +150,7 @@ export async function POST(request: Request) {
 
     const booking = await prisma.$transaction(async (tx) => {
       // 1. Acquire transaction-level advisory lock
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${classId}, ${objId})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${classId}::integer, ${objId}::integer)`;
 
       // 2. Perform safe, race-free overlap check
       const overlapping = await tx.booking.findMany({
@@ -196,7 +188,7 @@ export async function POST(request: Request) {
           endDate: parsedEndDate,
           totalPrice: Number(computedTotalPrice),
           securityDeposit: Number(suggestedDeposit),
-          paymentMethod: paymentMethod as PaymentMethod,
+          paymentMethod: PaymentMethod.STRIPE,
           status: BookingStatus.PENDING_APPROVAL,
           riskAssessment: {
             create: {
