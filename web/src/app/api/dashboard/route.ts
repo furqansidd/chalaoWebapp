@@ -49,13 +49,13 @@ export async function GET(request: Request) {
       const bookingsCount = bookings.length;
       const totalSpent = bookings.reduce((sum, b) => {
         if (
-          [
+          ([
             BookingStatus.PAID,
             BookingStatus.CHECKED_IN,
             BookingStatus.ACTIVE,
             BookingStatus.CHECKED_OUT,
             BookingStatus.COMPLETED,
-          ].includes(b.status)
+          ] as BookingStatus[]).includes(b.status)
         ) {
           return sum + b.totalPrice;
         }
@@ -63,12 +63,12 @@ export async function GET(request: Request) {
       }, 0);
 
       const activeBookingsCount = bookings.filter((b) =>
-        [
+        ([
           BookingStatus.PAID,
           BookingStatus.CHECKED_IN,
           BookingStatus.ACTIVE,
           BookingStatus.CHECKED_OUT,
-        ].includes(b.status)
+        ] as BookingStatus[]).includes(b.status)
       ).length;
 
       return NextResponse.json(
@@ -113,13 +113,13 @@ export async function GET(request: Request) {
       const carsCount = cars.length;
       const totalEarnings = bookings.reduce((sum, b) => {
         if (
-          [
+          ([
             BookingStatus.PAID,
             BookingStatus.CHECKED_IN,
             BookingStatus.ACTIVE,
             BookingStatus.CHECKED_OUT,
             BookingStatus.COMPLETED,
-          ].includes(b.status)
+          ] as BookingStatus[]).includes(b.status)
         ) {
           return sum + b.totalPrice;
         }
@@ -127,12 +127,12 @@ export async function GET(request: Request) {
       }, 0);
 
       const activeBookingsCount = bookings.filter((b) =>
-        [
+        ([
           BookingStatus.PAID,
           BookingStatus.CHECKED_IN,
           BookingStatus.ACTIVE,
           BookingStatus.CHECKED_OUT,
-        ].includes(b.status)
+        ] as BookingStatus[]).includes(b.status)
       ).length;
 
       const pendingApprovalsCount = bookings.filter(

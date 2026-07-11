@@ -1,9 +1,5 @@
 import crypto from "crypto";
 
-// Startup check: Must throw error if JWT_SECRET is not set in non-test environments
-if (!process.env.JWT_SECRET && process.env.NODE_ENV !== "test") {
-  throw new Error("FATAL: JWT_SECRET environment variable is not set.");
-}
 
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
